@@ -342,13 +342,8 @@ body{background:#1e1e1e;display:flex;flex-direction:column;align-items:center;mi
 /* S5 panels */
 .s5-panel{position:absolute;inset:0;display:flex;flex-direction:column;transition:opacity .3s ease}
 </style>
-<script>
-function initMap(){
-  window.mapsReady=true;
-  if(typeof initSearch==="function")initSearch();
-}
-</script>
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAOVYRIgupAurZup5y1PRh8Ismb1A3lLao&libraries=places&callback=initMap" defer></script>
+<script>function initMap(){window.mapsReady=true}</script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAOVYRIgupAurZup5y1PRh8Ismb1A3lLao&libraries=places&callback=initMap" async defer></script>
 </head>
 <body>
 <div class="phone" id="phone">
@@ -1298,11 +1293,6 @@ var VIBES=[
 var s5Cur=0;
 function doVibePicker(){
   s5Cur=0;
-  // If user pre-selected a vibe from S4A quick pills, jump to that card
-  if(APP.quickVibeSelected&&APP.vibe){
-    var idx=VIBES.findIndex(function(v){return v.name===APP.vibe;});
-    if(idx>=0)s5Cur=idx;
-  }
   renderVibeCards();
   renderVibeDots();
   updateVibeTheme();
@@ -1526,266 +1516,109 @@ function buildFallback(){
 function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
 
 /* ════ S8 ITINERARY ════ */
-function calcTotalCost(places){
-  var total=0;
-  places.forEach(function(p){
-    var s=p.cost||"";
-    var m=s.match(/(\d+)/g);
-    if(m)m.forEach(function(n){total+=parseInt(n);});
-  });
-  if(total===0)return"~400K";
-  if(total>=1000)return"~"+(total/1000).toFixed(1)+"M";
-  return"~"+total+"K";
-}
-function formatCostK(costStr){
-  if(!costStr)return"";
-  return costStr.replace(/(\d+)000/g,"$1tr").replace(/~(\d+)K/,"~$1K");
-}
-
 function renderItinerary(){
   var it=APP.itinerary;if(!it)return;
-  var places=(it.days&&it.days[0])?it.days[0].places:[];
-  var totalCost=calcTotalCost(places);
-  var startTime=places.length>0?(places[0].time||"07:30").split("-")[0]:"07:30";
-  var endTime=places.length>0?(places[places.length-1].time||"20:00").split("-")[1]||(places[places.length-1].time||"20:00").split("-")[0]:"20:00";
-  var totalHours=places.length*2;
-
-  // ── S8: Itinerary title + cards ──
   var tEl=document.getElementById("it-title"),sEl=document.getElementById("it-sub");
-  if(tEl)tEl.textContent=it.title||APP.city+" · "+APP.vibe;
-  if(sEl)sEl.textContent=(APP.days||1)+" ngày · "+places.length+" địa điểm · "+totalCost;
-  var cont=document.getElementById("itCards");
-  if(cont){
-    cont.innerHTML="";
-    places.forEach(function(p,i){
-      var c=document.createElement("div");c.className="icard rip";
-      c.innerHTML="<div class='icard-time'>"+p.time+"</div>"+
-        "<div class='icard-name'>"+p.emoji+" "+p.name+"</div>"+
-        "<div class='icard-desc'>"+p.desc+"</div>"+
-        "<div style='display:flex;align-items:center;justify-content:space-between;margin-top:4px'>"+
-        "<div class='icard-cost'>"+p.cost+"</div>"+
-        "<div style='font-size:10px;color:rgba(0,0,0,.35);font-weight:600'>📍 "+p.address+"</div></div>"+
-        "<button class='icard-swap rip' data-i='"+i+"'>Đổi địa điểm</button>";
-      c.addEventListener("click",function(){addRip(event,c);});
-      c.querySelector(".icard-swap").addEventListener("click",function(e){e.stopPropagation();APP._swapIdx=i;doSwapSheet(p,places);});
-      cont.appendChild(c);
-    });
-  }
-
-  // ── S9: Confirm card ──
+  if(tEl)tEl.textContent=it.title;if(sEl)sEl.textContent=it.subtitle;
+  var cont=document.getElementById("itCards");if(!cont)return;
+  cont.innerHTML="";
+  var places=(it.days&&it.days[0])?it.days[0].places:[];
+  places.forEach(function(p,i){
+    var c=document.createElement("div");c.className="icard rip";
+    c.innerHTML="<div class='icard-time'>"+p.time+"</div><div class='icard-name'>"+p.emoji+" "+p.name+"</div><div class='icard-desc'>"+p.desc+"</div><div class='icard-cost'>"+p.cost+"</div><button class='icard-swap rip' data-i='"+i+"'>Đổi</button>";
+    c.addEventListener("click",function(){addRip(event,c);});
+    c.querySelector(".icard-swap").addEventListener("click",function(e){e.stopPropagation();APP._swapIdx=i;doSwapSheet(p,places);});
+    cont.appendChild(c);
+  });
+  // Update confirm screen
   var sumT=document.getElementById("sumTitle"),sumS=document.getElementById("sumSub");
-  var sumCost=document.getElementById("sumCost");
-  var sumStart=document.getElementById("sumStart"),sumEnd=document.getElementById("sumEnd");
-  if(sumT)sumT.textContent=it.title||APP.city+" · "+APP.vibe;
+  if(sumT)sumT.textContent=it.title;
   if(sumS)sumS.textContent=places.length+" địa điểm · "+APP.budget;
-  if(sumCost)sumCost.textContent=totalCost;
-  if(sumStart)sumStart.textContent=startTime;
-  if(sumEnd)sumEnd.textContent=endTime;
-  // Checklist tip based on city
   var chk1=document.getElementById("chk1");
-  var cityTips={"Đà Lạt":"Áo ấm (sáng Đà Lạt lạnh)","Nha Trang":"Kem chống nắng SPF50+","Sa Pa":"Áo gió + giày đế bằng","Đà Nẵng":"Nước uống đủ (trời nóng)","Sài Gòn":"Áo mưa mỏng dự phòng","Hà Nội":"Check thời tiết trước"};
-  if(chk1)chk1.textContent=cityTips[APP.city]||"Sạc pin dự phòng đầy";
-
-  // ── S10: Active trip header + current/next place ──
-  var th=document.getElementById("tripHdr");if(th)th.textContent=APP.city+" · "+APP.vibe;
-  var tripProg=document.getElementById("tripProg");if(tripProg)tripProg.textContent="1/"+places.length;
+  if(chk1&&APP.city==="Đà Lạt")chk1.textContent="Áo ấm (sáng Đà Lạt lạnh)";
+  // Update active trip
   if(places.length>0){
     var p0=places[0];
     var cn=document.getElementById("currName"),cm=document.getElementById("currMeta"),ci=document.getElementById("currIco");
-    if(cn)cn.textContent=p0.name;
-    if(cm)cm.textContent=p0.time+" · "+p0.cost;
-    if(ci)ci.textContent=p0.emoji;
+    if(cn)cn.textContent=p0.name;if(cm)cm.textContent=p0.time+" · "+p0.cost;if(ci)ci.textContent=p0.emoji;
+    var th=document.getElementById("tripHdr");if(th)th.textContent=APP.city+" · "+APP.vibe;
     if(places.length>1){
       var p1=places[1];
-      var nn=document.getElementById("nextName"),nm2=document.getElementById("nextMeta"),ni2=document.getElementById("nextIco"),nt=document.getElementById("nextTime");
-      if(nn)nn.textContent=p1.name;
-      if(nm2)nm2.textContent=p1.desc+" · "+p1.cost;
-      if(ni2)ni2.textContent=p1.emoji;
-      if(nt)nt.textContent="Tiếp theo · "+(p1.time||"").split("-")[0];
+      var nn=document.getElementById("nextName"),nm2=document.getElementById("nextMeta"),ni3=document.getElementById("nextIco"),nt=document.getElementById("nextTime");
+      if(nn)nn.textContent=p1.name;if(nm2)nm2.textContent=p1.desc+" · "+p1.cost;if(ni3)ni3.textContent=p1.emoji;if(nt)nt.textContent="Tiếp theo · "+p1.time.split("-")[0];
     }
   }
-
-  // ── S11: Trip end stats ──
-  var s11p=document.getElementById("s11places"),s11np=document.getElementById("s11np");
-  var s11cost=document.getElementById("s11cost"),s11hr=document.getElementById("s11hr");
-  if(s11p)s11p.textContent=places.length+" địa điểm";
-  if(s11np)s11np.textContent=places.length;
-  if(s11cost)s11cost.textContent=totalCost;
-  if(s11hr)s11hr.textContent=totalHours+"h";
-
-  // ── S12: Stamp ──
+  // Update trip end
+  var np=document.getElementById("s11places"),nc=document.getElementById("s11np");
+  if(np)np.textContent=places.length+" địa điểm";if(nc)nc.textContent=places.length;
+  // Update stamp
   var sd=document.getElementById("stampDesc");
   if(sd)sd.textContent="Vibe "+APP.vibe+" · "+places.length+" địa điểm\nBộ sưu tập của "+APP.name;
-
-  // ── S8B swap: update swap pool with AI-suggested alternatives ──
-  APP._places=places;
 }
 
 /* ════ S8B SWAP ════ */
-async function doSwapSheet(place,allPlaces){
-  var sv=document.getElementById("swapVibe");if(sv)sv.textContent="Gợi ý thay thế · "+APP.vibe+" · "+APP.city;
+var SWAP_POOL={
+  "Đà Lạt":[
+    {name:"Cafe Trong Hẻm 39",emoji:"☕",desc:"Cùng Vibe · 0.3km · ~40K"},
+    {name:"Tiệm sách cũ Đà Lạt",emoji:"📚",desc:"Cùng Vibe · 0.5km · ~20K"},
+    {name:"Vườn hoa Mê Linh",emoji:"🌸",desc:"Cùng Vibe · 1.2km · Free"},
+  ],
+  default:[
+    {name:"Quán cà phê view đẹp",emoji:"☕",desc:"Cùng Vibe · gần đây · ~40K"},
+    {name:"Địa điểm nổi tiếng",emoji:"📸",desc:"Cùng Vibe · 0.8km · Free"},
+    {name:"Chợ địa phương",emoji:"🛒",desc:"Cùng Vibe · 1km · Free"},
+  ]
+};
+function doSwapSheet(place,allPlaces){
+  var items=SWAP_POOL[APP.city]||SWAP_POOL["default"];
+  var sv=document.getElementById("swapVibe");if(sv)sv.textContent="Gợi ý cùng Vibe · "+APP.vibe+" · "+APP.city;
   var cont=document.getElementById("swapItems");if(!cont)return;
-  // Show loading
-  cont.innerHTML="<div style='text-align:center;padding:20px;color:rgba(0,0,0,.4);font-size:13px;font-weight:600'>⏳ LaKa đang tìm địa điểm thay thế...</div>";
-  goTo("s8b");
-
-  var alternatives=[];
-  try{
-    var isProduction=window.location.hostname!=="localhost"&&!window.location.hostname.startsWith("file:");
-    var prompt="Gợi ý 3 địa điểm THẬT thay thế cho '"+place.name+"' tại "+APP.city+", vibe "+APP.vibe+". Trả về JSON array:\n[{\"name\":\"tên thật\",\"emoji\":\"☕\",\"desc\":\"mô tả ngắn · khoảng cách · chi phí\",\"cost\":\"~50K\",\"address\":\"địa chỉ thật\"}]\nChỉ trả về JSON array.";
-    var resp;
-    if(isProduction){
-      resp=await fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:prompt,city:APP.city,vibe:APP.vibe})});
-    }else{
-      resp=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",{method:"POST",headers:{"Content-Type":"application/json","X-goog-api-key":GK},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.9,maxOutputTokens:600}})});
-    }
-    if(resp.ok){
-      var data=await resp.json();
-      var text=data.candidates[0].content.parts[0].text;
-      text=text.replace(/```json/gi,"").replace(/```/g,"").trim();
-      var a=text.indexOf("["),b=text.lastIndexOf("]");
-      if(a>=0&&b>=0)text=text.substring(a,b+1);
-      alternatives=JSON.parse(text);
-    }
-  }catch(e){
-    // Fallback
-    alternatives=[
-      {name:"Quán cà phê cùng vibe",emoji:"☕",desc:"Cùng Vibe · 0.3km · ~40K",cost:"~40K",address:APP.city},
-      {name:"Điểm tham quan gần đây",emoji:"📸",desc:"Cùng Vibe · 0.5km · Free",cost:"Free",address:APP.city},
-      {name:"Chợ địa phương",emoji:"🛒",desc:"Trải nghiệm bản địa · 0.8km · Free",cost:"Free",address:APP.city},
-    ];
-  }
-
   cont.innerHTML="";
-  alternatives.forEach(function(it,i){
+  items.forEach(function(it,i){
     var d=document.createElement("div");d.className="swap-item rip"+(i===0?" first":"");
-    d.innerHTML="<div class='swap-ico'>"+it.emoji+"</div>"+
-      "<div style='flex:1'>"+
-        "<div style='font-size:14px;font-weight:800;color:var(--dark)'>"+it.name+"</div>"+
-        "<div style='font-size:12px;color:rgba(0,0,0,.45);margin-top:2px'>"+it.desc+"</div>"+
-        "<div style='font-size:11px;color:rgba(0,0,0,.3);margin-top:2px'>📍 "+it.address+"</div>"+
-      "</div>"+
-      "<button style='background:var(--or);border:none;border-radius:10px;padding:6px 12px;font-size:12px;font-weight:800;color:#fff;cursor:pointer;flex-shrink:0'>Chọn</button>";
+    d.innerHTML="<div class='swap-ico'>"+it.emoji+"</div><div style='flex:1'><div style='font-size:14px;font-weight:800;color:var(--dark)'>"+it.name+"</div><div style='font-size:12px;color:rgba(0,0,0,.45);margin-top:2px'>"+it.desc+"</div></div><button style='background:var(--or);border:none;border-radius:10px;padding:6px 12px;font-size:12px;font-weight:800;color:#fff;cursor:pointer;flex-shrink:0'>Chọn</button>";
     d.addEventListener("click",function(){
+      // Replace place in itinerary
       if(APP.itinerary&&APP.itinerary.days&&APP.itinerary.days[0]){
-        APP.itinerary.days[0].places[APP._swapIdx]={
-          time:place.time,name:it.name,emoji:it.emoji,
-          desc:it.desc,cost:it.cost,address:it.address
-        };
+        APP.itinerary.days[0].places[APP._swapIdx]={time:place.time,name:it.name,emoji:it.emoji,desc:it.desc,cost:it.desc.split("·").pop().trim(),address:APP.city};
         renderItinerary();
       }
       goBack();
     });
     cont.appendChild(d);
   });
+  goTo("s8b");
 }
 
 /* ════ S10 ACTIVE TRIP ════ */
-var CITY_COORDS={
-  "Đà Lạt":{lat:11.9404,lng:108.4583},
-  "Hà Nội":{lat:21.0285,lng:105.8542},
-  "Sài Gòn":{lat:10.7769,lng:106.7009},
-  "Hồ Chí Minh":{lat:10.7769,lng:106.7009},
-  "Đà Nẵng":{lat:16.0544,lng:108.2022},
-  "Nha Trang":{lat:12.2388,lng:109.1967},
-  "Sa Pa":{lat:22.3364,lng:103.8437},
-  "Phú Quốc":{lat:10.2899,lng:103.9840},
-  "Huế":{lat:16.4637,lng:107.5909},
-  "Hội An":{lat:15.8801,lng:108.3380},
-  "Buôn Mê Thuột":{lat:12.6667,lng:108.0500},
-};
-var _gmapInstance=null;
 function doActiveTrip(){
-  var mapEl=document.getElementById("gmap-container");
-  var ph=document.getElementById("mapPlaceholder");
-  if(!mapEl)return;
-
-  // Ensure map container has height
-  mapEl.style.width="100%";
-  mapEl.style.height="100%";
-  mapEl.style.minHeight="160px";
-
-  var coords=CITY_COORDS[APP.city]||{lat:16.0,lng:107.0};
-  var places=(APP.itinerary&&APP.itinerary.days&&APP.itinerary.days[0])?APP.itinerary.days[0].places:[];
-
-  if(!window.mapsReady||!window.google){
-    // Show styled placeholder with place names instead
-    if(ph){
-      ph.style.display="flex";
-      ph.style.flexDirection="column";
-      ph.style.gap="4px";
-      ph.innerHTML="<div style='font-size:11px;font-weight:700;color:rgba(255,255,255,.6);margin-bottom:6px'>📍 LỘ TRÌNH HÔM NAY</div>"+
-        places.map(function(p,i){return "<div style='font-size:12px;color:#fff;font-weight:600;background:rgba(255,255,255,.1);border-radius:8px;padding:5px 10px;text-align:left'>"+
-          "<span style='color:var(--yel);margin-right:6px'>"+(i+1)+".</span>"+p.emoji+" "+p.name+"</div>";}).join("");
-    }
-    return;
-  }
-
-  if(ph)ph.style.display="none";
-
-  // Reuse or create map
-  if(!_gmapInstance){
-    _gmapInstance=new google.maps.Map(mapEl,{
-      center:coords,zoom:14,
-      disableDefaultUI:true,
-      gestureHandling:"cooperative",
-      styles:[
-        {featureType:"poi",elementType:"labels",stylers:[{visibility:"off"}]},
-        {featureType:"water",stylers:[{color:"#a0d4f5"}]},
-        {featureType:"landscape",stylers:[{color:"#f5f0e8"}]},
-        {featureType:"road.highway",elementType:"geometry",stylers:[{color:"#f0c987"}]},
-      ]
-    });
-  }else{
-    _gmapInstance.setCenter(coords);
-    google.maps.event.trigger(_gmapInstance,"resize");
-  }
-
-  var gmap=_gmapInstance;
-  var markerColors=["#fe5112","#336DD5","#2d6a2d","#e67e22","#8e44ad"];
-
-  // Geocode each place address for real pin positions
-  if(places.length>0&&window.google.maps.Geocoder){
-    var geocoder=new google.maps.Geocoder();
-    var bounds=new google.maps.LatLngBounds();
-    var geocoded=0;
-    places.forEach(function(p,i){
-      var addr=(p.address||p.name)+", "+APP.city+", Việt Nam";
-      geocoder.geocode({address:addr},function(results,status){
-        var pos=coords; // fallback to city center
-        if(status==="OK"&&results[0]){
-          pos={lat:results[0].geometry.location.lat(),lng:results[0].geometry.location.lng()};
-        }else{
-          // Scatter pins slightly around city center if geocode fails
-          pos={lat:coords.lat+(i-places.length/2)*0.004,lng:coords.lng+(i-places.length/2)*0.003};
-        }
-        bounds.extend(pos);
-        new google.maps.Marker({
-          position:pos,map:gmap,
-          label:{text:""+(i+1),color:"#fff",fontWeight:"bold",fontSize:"12px"},
-          icon:{path:google.maps.SymbolPath.CIRCLE,scale:16,
-            fillColor:markerColors[i%markerColors.length],fillOpacity:1,
-            strokeColor:"#fff",strokeWeight:2.5},
-          title:p.name
+  // Init Google Maps if available
+  if(window.mapsReady&&window.google){
+    var mapEl=document.getElementById("gmap-container");
+    var ph=document.getElementById("mapPlaceholder");
+    if(mapEl&&ph){
+      ph.style.display="none";
+      var coords={lat:11.9404,lng:108.4583};
+      if(APP.city==="Hà Nội")coords={lat:21.0285,lng:105.8542};
+      else if(APP.city==="Sài Gòn")coords={lat:10.8231,lng:106.6297};
+      else if(APP.city==="Đà Nẵng")coords={lat:16.0544,lng:108.2022};
+      var gmap=new google.maps.Map(mapEl,{center:coords,zoom:13,disableDefaultUI:true,
+        styles:[{featureType:"poi",elementType:"labels",stylers:[{visibility:"off"}]},{featureType:"water",stylers:[{color:"#a0d4f5"}]},{featureType:"landscape",stylers:[{color:"#f5f0e8"}]}]});
+      // Geolocation
+      if(navigator.geolocation){
+        navigator.geolocation.getCurrentPosition(function(pos){
+          var uc={lat:pos.coords.latitude,lng:pos.coords.longitude};
+          gmap.panTo(uc);
+          new google.maps.Marker({position:uc,map:gmap,icon:{path:google.maps.SymbolPath.CIRCLE,scale:8,fillColor:"#336DD5",fillOpacity:1,strokeColor:"#fff",strokeWeight:2}});
         });
-        geocoded++;
-        if(geocoded===places.length){
-          gmap.fitBounds(bounds,{top:20,right:20,bottom:20,left:20});
-        }
+      }
+      // Place markers from itinerary
+      var places=(APP.itinerary&&APP.itinerary.days)?APP.itinerary.days[0].places:[];
+      var colors=["#fe5112","#336DD5","#2d6a2d","#e67e22"];
+      places.forEach(function(p,i){
+        new google.maps.Marker({position:coords,map:gmap,label:{text:""+(i+1),color:"#fff",fontWeight:"bold",fontSize:"12px"},icon:{path:google.maps.SymbolPath.CIRCLE,scale:14,fillColor:colors[i%colors.length],fillOpacity:1,strokeColor:"#fff",strokeWeight:2},title:p.name});
       });
-    });
-  }
-
-  // User location dot
-  if(navigator.geolocation){
-    navigator.geolocation.getCurrentPosition(function(pos){
-      var uc={lat:pos.coords.latitude,lng:pos.coords.longitude};
-      new google.maps.Marker({position:uc,map:gmap,
-        icon:{path:google.maps.SymbolPath.CIRCLE,scale:8,
-          fillColor:"#336DD5",fillOpacity:1,strokeColor:"#fff",strokeWeight:2},
-        title:"Vị trí của bạn"
-      });
-    },function(){});
+    }
   }
 }
 
@@ -1881,10 +1714,12 @@ document.addEventListener("DOMContentLoaded",function(){
       }
     });
   });
-  // Nút Bắt đầu ngay trong S4a — luôn qua S4b → S5 → S6
-  // QuickVibe chỉ pre-select vibe ở S5, không skip S6
+  // Nút Bắt đầu ngay trong S4a
   on("btnHomeStart",function(){
-    APP.skipVibePicker=false; // ALWAYS go through S5 and S6
+    // Luôn đi qua S4b để chọn địa điểm
+    // Nếu đã chọn Quick Vibe → S4b → S6 (skip S5)
+    // Nếu chưa chọn Quick Vibe → S4b → S5 → S6 (bình thường)
+    APP.skipVibePicker=!!APP.quickVibeSelected;
     goTo("s4b");
   });
   on("btnCre",function(){goTo("s3a");});
@@ -1897,13 +1732,17 @@ document.addEventListener("DOMContentLoaded",function(){
   on("bg2",function(){goTo("s4a");});on("bz2",function(){goTo("s4a");});on("toSU",function(){goTo("s3a");});
   on("btnLg",function(){goTo("s4a");});
   on("ey2",function(){var i=document.getElementById("pw2");if(i)i.type=i.type==="password"?"text":"password";});
-  on("hcard",function(){APP.skipVibePicker=false;goTo("s4b");});
-  on("hcard2",function(){APP.skipVibePicker=false;APP.quickVibeSelected=false;goTo("s4b");});
+  on("hcard",function(){APP.skipVibePicker=!!APP.quickVibeSelected;goTo("s4b");});on("hcard2",function(){APP.skipVibePicker=false;APP.quickVibeSelected=false;goTo("s4b");});
   on("btnPlan",function(){
     if(!APP.city)APP.city="Đà Lạt";
-    // Always go S5 → S6, never skip
-    // If quickVibe was selected, S5 will auto-highlight that vibe card
-    goTo("s5");
+    if(APP.skipVibePicker){
+      // Quick Vibe đã chọn: bỏ qua S5+S6, dùng giá trị mặc định
+      if(!APP.days||APP.days<1)APP.days=1;
+      if(!APP.budget)APP.budget="Vừa phải";
+      goTo("s7");
+    }else{
+      goTo("s5");
+    }
   });
   on("btnPickVibe",function(){APP.vibe=VIBES[s5Cur].name;goTo("s6");});
   on("btnAI",function(){goTo("s7");});
